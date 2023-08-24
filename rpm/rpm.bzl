@@ -7,6 +7,9 @@ load(
     _get_layers = "get_from_target",
 )
 
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
+
+
 def rpm_image(**kwargs):
     _rpms_layer(**kwargs)
 
@@ -33,19 +36,22 @@ def _rpms_impl(ctx, rpms = None):
         tars = tars + ctx.files.tars
     return _container.image.implementation(ctx, tars = tars)
 
+omit_allowlist = dicts.omit(_container.image.attrs, ["_allowlist_function_transition"])
+_rpms_layer_attrs = dict(omit_allowlist)
+_rpms_layer_attrs.update({
+    "rpms": attr.label_list(allow_files=True, mandatory=True),
+    "_rpm_installer": attr.label(
+        default=Label("//rpm:install_rpms"),
+        cfg="exec",
+        executable=True,
+        allow_files=True,
+    ),
+})
+
 _rpms_layer = rule(
-    attrs = dict(_container.image.attrs.items() + {
-        # The dependency whose runfiles we're appending.
-        "rpms": attr.label_list(allow_files = True, mandatory = True),
-        "_rpm_installer": attr.label(
-            default = Label("//rpm:install_rpms"),
-            cfg = "host",
-            executable = True,
-            allow_files = True,
-        ),
-    }.items()),
-    executable = True,
-    outputs = _container.image.outputs,
-    toolchains = ["@io_bazel_rules_docker//toolchains/docker:toolchain_type"],
-    implementation = _rpms_impl,
+    attrs=_rpms_layer_attrs,
+    executable=True,
+    outputs=_container.image.outputs,
+    toolchains=["@io_bazel_rules_docker//toolchains/docker:toolchain_type"],
+    implementation=_rpms_impl,
 )
